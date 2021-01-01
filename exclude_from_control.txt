@@ -1,0 +1,155 @@
+Q49085 African Americans 
+Q1113048 Iranian American
+Q1790886 Cuban American
+Q581921 Mexican American 
+Q44614 Taiwanese American 
+Q36747 Indigenous peoples of América
+Q58669 Hispanic and Latino Americans
+Q1956640 Anishinaabe
+Q1156766 Japanese American
+Q4256383 Indonesian American
+Q7258666 Stateside Puerto Ricans 
+Q6488006 Laotian American 
+Q190168 Yoruba people 
+Q1996554 Kashmiri Pandit
+Q276879 Korean American
+Q2584186 Iranian Armenians
+Q893594 Puerto Ricans
+Q484464 Koreans
+Q2643509 Indian American
+Q503963 Bamar
+Q1413685 Filipino Americans
+Q932244 Sinhala people
+Q5622783 Guyanese American
+Q472834 Thai people 
+Q483569 Belarusians
+Q1464994 Latino 
+Q5408188 Somali American
+Q1257826 Lenca people
+Q5892930 Honduran American
+Q4858560 Barbadian American
+Q4855425 Bangladeshi American
+Q1211934 Hispanic
+Q244157 Igbo people 
+Q381151 Walloons
+Q42740 Han Chinese people 
+Q127885 Serbs
+Q2886395 Basque American
+Q873625 Brazilians 
+Q4172847 Filipino people
+Q241696 Somalis 
+Q533312 Koreans in Japan 
+Q686949 Cajun
+Q1195125 Cubans
+Q862086 Indian people
+Q2309935 Persian Jews 
+Q2408653 Thai Chinese people 
+Q2672654 History of the Jews in Morocco
+Q161652 Japanese people 
+Q816665 Benadiri people
+Q9176 Korean 
+Q1307911 chicano 
+Q388467 Afro-Cuban
+Q105405 Cherokee 
+Q49297 Indigenous peoples of the United States 
+Q4357542 Bolivians 
+Q1421205 Lithuanian Jews
+Q187985 Tibetan people
+Q1815623 Sri Lankan Tamils 
+Q2426677 Iranian Azerbaijanis 
+Q1563891 Afro Arabs
+Q7032863 Nigerian American 
+Q4713742 Hmong American
+Q216151 Vietnamese people
+Q617982 Costa Rican American
+Q107434 Sioux 
+Q2657969 Vietnamese American
+Q7919819 Venezuelan American
+Q133032 Hungarians
+Q727928 Asian American
+Q6935055 Multiracial American
+Q483505 Tajiks
+Q1209676 Mexicans
+Q7125803 Pakistani American 
+Q5555460 Ghanaian American
+Q3473575 Sardinian
+Q7586018 Sri Lankan American
+Q5639720 Haitian American 
+Q4999416 Burmese American
+Q7994663 White Earth Band of Ojibwe
+Q35323 Arabs
+Q6127476 African Jamaican
+Q6432084 Koreans in the United Kingdom
+Q7450261 Seneca-Cayuga Tribe of Oklahoma 
+Q11334570 Black Indians in the United States
+Q324516 Choctaw 
+Q947650 Osage Nation
+Q1516298 Tulalip
+Q1808217 Lummi
+Q428575 Yakis como los tacos muy RICOS
+Q102090 Apache 
+Q117100 Kiowa people
+Q817393 black people 
+Q948126 Hungarian American 
+Q1276073 Chileans 
+Q6127409 Jamaican American
+Q6025447 Indo Caribbeans 
+Q478289 Jews in Hungary
+Q1217927 Dutch Burghers
+Q3036435 Afro Latin Americans 
+Q212106 Dinka 
+Q7681242 Tamil American
+Q167420 Croats 
+Q28739968 Cuban
+Q402913 Bengali people
+Q7406487 Salvadoran American
+Q1983634 Odia 
+Q4450068 Thai American
+Q1283606 Native Hawaiians 
+Q703914 Hoklo people
+Q4690200 Afro Trinidadians and Tobagonians 
+Q7985442 West Indian Americans
+Q7361511 Romani Americans
+Q7434888 Eurasian 
+Q7682665 Ethnic Chinese 
+Q582779 Sikh
+Q5334370 Ecuadorian American 
+Q5290725 Dominican American
+Q7541693 Slovene American 
+Q668 India 
+Q1672477 iranian people 
+Q16821017 Afro-Barbadian 
+Q902325 Tsonga people 
+Q275453 Bai people 
+Q1930360 Chinese Cuban 
+Q2844818 Amerasian 
+Q7842496 Trinidadian and Tobagonian American 
+Q6907971 History of the Jews in Ethiopia
+Q4131845 Haitians 
+Q2712961 Afro Asians
+Q4386404 Louisiana Creole people
+Q4690178 Afro-Dutch
+Q2050339 Afro Caribbeans
+Q5330004 Eastern Band of Cherokee Indians
+Q1003039 Chinese Singaporeans 
+Q690869 Ruthenians (historical ethnonym) 
+Q854323 Punjabi people
+Q653884 Hispanic America 
+Q1258074 Sindhis
+Q4920978 Black Hispanic and Latino Americans
+Q4690182 Afro-Guyanese
+Q3310017 Pakistanis
+Q1287427 Dogra
+Q5025138 Cambodian American 
+Q31230 Chechens
+Q543386 Oglala Lakota 
+Q118281 Kannada people
+Q1261777 Serbian American
+Q16242628 African diaspora in the Americas
+Q707133 Taiwanese people 
+Q6510842 Lebanese American
+Q1060991 Chamorro people
+Q333049 Lakota people
+Q11904259 Afro-Puerto Ricans
+Q418708 Telugu people
+Q1456870 Nlaka'pamux

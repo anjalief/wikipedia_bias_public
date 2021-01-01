@@ -203,7 +203,6 @@ def compare_lang_secs(treatment, matched_sample, lang, min_article_count):
     print(treatment_average, control_average, pvalue) # Number of Sections
 
     sect_counts = {x:c for x,c in sect_counts.items() if c >= min_article_count}
-    # print("Number of sections", len(sect_counts))
 
     treatment_sect_to_length = defaultdict(list)
     control_sect_to_length = defaultdict(list)
@@ -405,9 +404,6 @@ def print_sample(d, max_print = 10):
         print_count += 1
         if print_count > max_print:
             break
-        # sections = set([y.lower() for y in info['section-names'][0]])
-        # if 'metoo campaign' in sections:
-        #     print (x)
 
 def process_data(tupl):
     treatment, matched_sample, matched_pairs = tupl
@@ -427,8 +423,6 @@ def process_data(tupl):
         else:
             new_matched_pairs.append(x)
 
-    # for x in control_counts.most_common(20):
-    #     print(x)
 
     print("Dropping", len(treatment_drop), len(control_drop))
 
@@ -454,7 +448,7 @@ def print_unmatched_quick_counts(all_treatment, all_control):
             cat_nums.append(len(info['categories']))
             lang_nums.append(len(info['langs']))
         return lengths, cat_nums, lang_nums
-    
+
     treatment_lengths, treatment_cats, treatment_langs = get_counts(all_treatment)
     control_lengths, control_cats, control_langs = get_counts(all_control)
     print(",Treatment Average, Control Average,p-value")
@@ -504,9 +498,6 @@ def print_sample_pairs(matched_pairs, treatment, matched_sample):
 
     for s in sample:
         treatment_name, control_name, score, cats = s
-        # control_name = s[1]
-        # score = s[2]
-        # cats = s[3]
 
         treatment_info = treatment[treatment_name]
         control_info = matched_sample[control_name + "::" + treatment_name]
@@ -528,30 +519,26 @@ def run_analysis(tupl, treatment_names, control_names, treatment_categories, peo
         print("Printing unmatched odds")
         print("################################################################################")
 
-        # people, _, _ = prepare_people()
         all_treatment = {x:people[x] for x in treatment_names if x in people}
-        # for p,info in all_treatment.items():
-        #     treatment[p]["categories"] = set(list(info["tfidf"].keys()))
-
         all_control = {x:people[x] for x in control_names if x in people}
         print("Data sizes", len(all_treatment), len(all_control))
 
         print_metrics(all_treatment, all_control, None, vocab, "Empty", treatment_categories)
-        # print_odds_from_people(all_treatment, all_control)
-        # print_unmatched_quick_counts(all_treatment, all_control)
-        # compare_unmatched_sec_lengths(all_treatment, all_control, min_article_count)
+        print_odds_from_people(all_treatment, all_control)
+        print_unmatched_quick_counts(all_treatment, all_control)
+        compare_unmatched_sec_lengths(all_treatment, all_control, min_article_count)
     else:
-        # print_sample_pairs(matched_pairs, treatment, matched_sample)
+        print_sample_pairs(matched_pairs, treatment, matched_sample)
         print_metrics(treatment, matched_sample, None, vocab, "Empty", treatment_categories)
-        # print_odds_from_people(treatment, matched_sample)
-        # compare_article_lengths(treatment, matched_sample)
-        # compare_category_counts(treatment, matched_sample)
-        # compare_langs(treatment, matched_sample, min_article_count)
-        # compare_edits(treatment, matched_sample)
-        # compare_sec_lengths(treatment, matched_sample, min_article_count)
-        # compare_named_sec(treatment, matched_sample, "personal life")
-        # compare_named_sec(treatment, matched_sample, "career")
-        # print_language_counts(treatment, matched_sample)
+        print_odds_from_people(treatment, matched_sample)
+        compare_article_lengths(treatment, matched_sample)
+        compare_category_counts(treatment, matched_sample)
+        compare_langs(treatment, matched_sample, min_article_count)
+        compare_edits(treatment, matched_sample)
+        compare_sec_lengths(treatment, matched_sample, min_article_count)
+        compare_named_sec(treatment, matched_sample, "personal life")
+        compare_named_sec(treatment, matched_sample, "career")
+        print_language_counts(treatment, matched_sample)
 
 
 def get_transgender_lang_diffs():
@@ -584,8 +571,6 @@ def get_lang_counts(treatment, matched_sample):
         all_langs.update(treatment_langs)
         all_langs.update(control_langs)
 
-
-    
     for names,control_info in matched_sample.items():
         treatment_name = names.split('::')[1]
         treatment_langs = set([y[0] for y in treatment[treatment_name]['langs']])
@@ -599,7 +584,6 @@ def get_lang_counts(treatment, matched_sample):
             treatment_lang_to_binary[l].append(treatment_pres)
 
     assert(len(treatment_lang_to_binary) == len(control_lang_to_binary))
-    # lang_diffs = {l:(treatment_lang_to_binary[l])/(treatment_lang_to_binary[l] + control_lang_to_binary[l])  for l in all_langs}
     lang_diffs = {l:get_cohen_d(treatment_lang_to_binary[l], control_lang_to_binary[l]) for l in all_langs}
     return lang_diffs
 
@@ -660,10 +644,10 @@ def main():
             # We didn't define women group with categories, there are no invalid cats
             run_analysis(women, name_women, name_men, set(), people, vocab, 500, args.print_unmatched)
         if args.people_type == 'transgender_women':
-                # We didn't define group with categories, there are no invalid cats
+            # We didn't define group with categories, there are no invalid cats
             run_analysis(transgender_women, name_transgender_women, name_men, set(), people, vocab, 20, args.print_unmatched)
         if args.people_type == 'transgender_men':
-                # We didn't define group with categories, there are no invalid cats
+            # We didn't define group with categories, there are no invalid cats
             run_analysis(transgender_men, name_transgender_men, name_men, set(), people, vocab, 20, args.print_unmatched)
         if args.people_type == 'nonbinary':
             run_analysis(nb, name_nb, name_men, category_nb, people, vocab, 50, args.print_unmatched)
