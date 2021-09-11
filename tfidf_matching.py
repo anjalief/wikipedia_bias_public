@@ -31,14 +31,19 @@ def get_num_cats(tgt_info, cand_info, cand_name):
     common_cats = tgt_info["categories"].intersection(cand_info["categories"])
     return cand_info, cand_name, len(common_cats), common_cats
 
+def get_propensity_diff(tgt_info, cand_info, cand_name):
+    common_cats = tgt_info["categories"].intersection(cand_info["categories"])
+    return cand_info, cand_name, abs(tgt_info["propensity_score"] - cand_info["propensity_score"]), common_cats
+
 def get_percent_cats(tgt_info, cand_info, cand_name):
     common_cats = tgt_info["categories"].intersection(cand_info["categories"])
     return cand_info, cand_name, len(common_cats) / len(cand_info["categories"]), common_cats
 
-def make_matches(target_people, candidate_people, sim_metric):
+def make_matches(target_people, candidate_people, sim_metric, max_match_count):
     matched_dict = {}
     treatment_dict = {}
     matched_pairs = []
+    candidate_counts = Counter()
     for p,info in target_people.items():
         match_scores = [sim_metric(info, cand, name) for name,cand in candidate_people.items()]
         match_scores = [x for x in match_scores if x is not None]
@@ -51,7 +56,63 @@ def make_matches(target_people, candidate_people, sim_metric):
         matched_dict[match_name + "::" + p] = match_info
         treatment_dict[p] = info
         matched_pairs.append((p, match_name, score, common_cats))
+        candidate_counts[match_name] += 1
+
+        if candidate_counts[match_name] >= max_match_count:
+            del candidate_people[match_name]
+
     return treatment_dict, matched_dict, matched_pairs
+
+def compute_propensity_scores(target_people, candidate_people, valid_cats, tf_idf=False):
+    cats_to_idx = {c:i for i,c in enumerate(valid_cats)}
+
+    rows = []
+    cols = []
+    data = []
+    row_idx = 0
+    for t,tgt_info in target_people.items():
+        for c in tgt_info['categories']:
+            if c in cats_to_idx:
+                rows.append(row_idx)
+                cols.append(cats_to_idx[c])
+                if tf_idf:
+                    data.append(tgt_info["tfidf"][c])
+                else:
+                    data.append(1)
+        row_idx += 1
+
+    for t,cand_info in candidate_people.items():
+        for c in cand_info['categories']:
+            if c in cats_to_idx:
+                rows.append(row_idx)
+                cols.append(cats_to_idx[c])
+                if tf_idf:
+                    data.append(cand_info["tfidf"][c])
+                else:
+                    data.append(1)
+        row_idx += 1
+    print("Sizes", len(target_people), len(candidate_people), len(target_people)+len(candidate_people))
+
+    all_feats = csr_matrix((data, (rows, cols)))
+    print("Feature shape", all_feats.shape)
+    target_labels = np.ones(len(target_people))
+    candidate_labels = np.zeros(len(candidate_people))
+    all_labels = list(target_labels) + list(candidate_labels)
+    model = LogisticRegression(max_iter=5000)
+    model.fit(all_feats, all_labels)
+
+    probs = model.predict_proba(all_feats)
+    for i,t in enumerate(target_people):
+        target_people[t]["propensity_score"] = probs[i, 1]
+
+    start_idx = len(target_people)
+    for i,t in enumerate(candidate_people):
+        candidate_people[t]["propensity_score"] = probs[start_idx + i, 1]
+    print("Candidate propensity score stats", np.mean(probs[start_idx:,1]), np.max(probs[start_idx:,1]), np.min(probs[start_idx:,1]))
+    print("Target Propensity score stats", np.mean(probs[:start_idx,1]), np.max(probs[:start_idx,1]), np.min(probs[:start_idx,1]))
+    preds = model.predict(all_feats)
+    print("F1, Precision, Recall", f1_score(all_labels, preds), precision_score(all_labels, preds), recall_score(all_labels, preds))
+    print("Accuracy", accuracy_score(all_labels, preds))
 
 
 # For category eval, track who is in the category
@@ -128,7 +189,7 @@ def prepare_people(slope = 0.4, cat = None, verbose=False, remove_tune_people=Fa
 
 # Category method for evaluating the matching methodology. Sample a category and sample
 # 500 people from that category to be the target set
-def simulate_by_category(sim_metric, slope, cat = None, random_seed = None):
+def simulate_by_category(sim_metric, slope, max_match_count, cat = None, random_seed = None):
     valid_cats = load_filtered_categories()
     candidate_cats = [c for c,p in valid_cats.items() if len(p) >= 500 and not c in TUNE_CATEGORIES]
     if cat is None:
@@ -144,12 +205,18 @@ def simulate_by_category(sim_metric, slope, cat = None, random_seed = None):
     treatment = {p:x for p,x in people.items() if p in treatment}
     candidates = {p:x for p,x in people.items() if not p in people_in_cat}
 
+    if sim_metric_str == "propensity":
+        del valid_cats[cat]
+        compute_propensity_scores(treatment, candidates, valid_cats, tf_idf=False)
+    elif sim_metric_str == "propensity_tfidf":
+        del valid_cats[cat]
+        compute_propensity_scores(treatment, candidates, valid_cats, tf_idf=True)
 
     if sim_metric == "random":
         matched_sample = get_people_sample(candidates, len(treatment))
         matched_pairs = None
     else:
-        treatment, matched_sample, matched_pairs = make_matches(treatment, candidates, sim_metric)
+        treatment, matched_sample, matched_pairs = make_matches(treatment, candidates, sim_metric, max_match_count)
 
     eval_matched = assess_match(treatment, matched_sample, vocab, set([cat]))
     print_eval(eval_matched)
@@ -158,17 +225,24 @@ def simulate_by_category(sim_metric, slope, cat = None, random_seed = None):
 
 # Main function for evaluating the matching methodology. Sample 1000 people and compare them
 # to a matched sample or another random sample
-def simulate(sim_metric, slope, random_seed = None):
+def simulate(sim_metric, slope, max_match_count, random_seed = None):
     people, _, vocab = prepare_people(slope, verbose=False, remove_tune_people=True)
 
     treatment = get_people_sample(people, 1000, seed=random_seed)
     candidates = {p:x for p,x in people.items() if not p in treatment}
 
+    if sim_metric_str == "propensity":
+        del valid_cats[cat]
+        compute_propensity_scores(treatment, candidates, valid_cats, tf_idf=False)
+    elif sim_metric_str == "propensity_tfidf":
+        del valid_cats[cat]
+        compute_propensity_scores(treatment, candidates, valid_cats, tf_idf=True)
+
     if sim_metric == 'random':
         matched_sample = get_people_sample(candidates, len(treatment))
         matched_pairs = []
     else:
-        treatment, matched_sample, matched_pairs = make_matches(treatment, candidates, sim_metric)
+        treatment, matched_sample, matched_pairs = make_matches(treatment, candidates, sim_metric, max_match_count)
 
     eval_matched = assess_match(treatment, matched_sample, vocab)
 
@@ -177,7 +251,7 @@ def simulate(sim_metric, slope, random_seed = None):
 
 
 # Used for pivot-slope tf-idf weighting. Try different slope values
-def tune_slope(sim_metric=get_pivot_cosine_sim):
+def tune_slope(sim_metric=get_pivot_cosine_sim, max_match_count):
     # we use this as the pivot
     slope = 0.5
     for slope in range(5, 10):
@@ -190,7 +264,7 @@ def tune_slope(sim_metric=get_pivot_cosine_sim):
         candidates = {p:x for p,x in people.items() if not p in treatment}
         random_control = get_people_sample(candidates, len(treatment))
 
-        treatment, matched_sample, matched_pairs = make_matches(treatment, candidates, sim_metric)
+        treatment, matched_sample, matched_pairs = make_matches(treatment, candidates, sim_metric, max_match_count)
         for p in matched_pairs[:10]:
             print(p)
         print("Sample sizes", len(treatment), len(matched_sample))
@@ -204,34 +278,42 @@ def tune_slope(sim_metric=get_pivot_cosine_sim):
     return treatment, matched_pairs, random_control
 
 
+def get_match_method(match_method_str):
+    metric = None
+    if match_method_str == "number":
+        metric = get_num_cats
+    elif match_method_str == "percent":
+        metric = get_percent_cats
+    elif match_method_str == "tfidf":
+        metric = get_cosine_sim
+    elif match_method_str == "pivot_tfidf":
+        metric = get_pivot_cosine_sim
+    elif match_method_str == "random":
+        metric = match_method_str
+    elif match_method_str == "propensity" or match_method_str == "propensity_tfidf":
+        metric = get_propensity_diff
+    else:
+        assert False
+    return metric
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--run", choices=['tune', 'simulate', 'simulate_category', 'tune_category'], default='simulate', help="Time of simulation or parameter tuning to run")
     parser.add_argument("--match_method", choices=['number', 'percent', 'tfidf', 'pivot_tfidf', 'random'], default='pivot_tfidf', help="Type of matching to use")
     parser.add_argument("--random_seed", type=int, default=None, help="Random seed. Can be used to ensure that the randomly-sampled target groups are the same accross different runs, so that matching algorithms can be compared using the same simulated target groups.")
     parser.add_argument("--slope", type=float, default=0.3, help="Slope parameter. Only used for pivot tf-idf matching")
+    parser.add_argument("--max_match_count", type=int, default=10, help="limit the maximum number of times a comparison person can be used as a match")
     args = parser.parse_args()
 
-    if args.match_method == "number":
-        metric = get_num_cats
-    elif args.match_method == "percent":
-        metric = get_percent_cats
-    elif args.match_method == "tfidf":
-        metric = get_cosine_sim
-    elif args.match_method == "pivot_tfidf":
-        metric = get_pivot_cosine_sim
-    elif args.match_method == "random":
-        metric = args.match_method
-    else:
-        assert False
+    metric = get_match_method(args.match_method)
 
     print("Running " + args.match_method + " " + args.run + " " + str(args.slope))
     if args.run == 'simulate_category':
-        _, matched_pairs, _ = simulate_by_category(metric, args.slope, random_seed = args.random_seed)
+        _, matched_pairs, _ = simulate_by_category(metric, args.slope, args.max_match_count, random_seed = args.random_seed, sim_metric_str = args.match_method)
     elif args.run == 'simulate':
-        _, matched_pairs, _ = simulate(metric, args.slope, args.random_seed)
+        _, matched_pairs, _ = simulate(metric, args.slope, args.max_match_count, args.random_seed, sim_metric_str = args.match_method)
     elif args.run == 'tune_category':
         for c in TUNE_CATEGORIES:
-            simulate_by_category(metric, args.slope, c)
+            simulate_by_category(metric, args.slope, args.max_match_count, c)
     else:
-        tune_slope(metric)
+        tune_slope(metric, args.max_match_count)
