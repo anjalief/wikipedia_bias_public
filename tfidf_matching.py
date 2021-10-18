@@ -251,7 +251,7 @@ def simulate(sim_metric, slope, max_match_count, random_seed = None):
 
 
 # Used for pivot-slope tf-idf weighting. Try different slope values
-def tune_slope(sim_metric=get_pivot_cosine_sim, max_match_count):
+def tune_slope(sim_metric, max_match_count):
     # we use this as the pivot
     slope = 0.5
     for slope in range(5, 10):

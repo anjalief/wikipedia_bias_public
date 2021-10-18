@@ -14,7 +14,9 @@ from pandas import crosstab, Categorical
 import numpy as np
 from math import sqrt
 
-CACHE_PATH = '/projects/tir3/users/anjalief/wikipedia_bias/cache'
+CACHE_PATH = '/projects/tir3/users/anjalief/wikipedia_bias_public/cache'
+VIZ_CACHE_PATH = '/projects/tir3/users/anjalief/wikipedia_bias_public/viz_cache'
+MATCHED_CACHE_PATH = '/projects/tir3/users/anjalief/wikipedia_bias_public/matched_cache'
 
 DROP_CATS =  ["Wiki", "mdy_dates", "dmy_dates", "All_stub_articles", "Living_people", "Articles", "template", "lacking_sources","articles", "language_sources", "CS1", "birth_missing_", "Infobox", "infobox", "containing_links", "lacking_titles", "Pages_with_", "Pages_using", "All_pages_", "Use_Indian_English", "Use_Australian_English", "Use_British_English", "_stubs"]
 
@@ -165,7 +167,7 @@ def get_filtered_people_with_topics():
 
 
 def get_filtered_people():
-    cache_name = os.path.join(CACHE_PATH, "./filtered_people.pickle")
+    cache_name = os.path.join(CACHE_PATH, "filtered_people.pickle")
     if os.path.exists(cache_name):
         with open(cache_name,"rb") as file:
             people, vocab = pickle.load(file)
@@ -200,6 +202,87 @@ def get_filtered_people():
     with open(cache_name,"wb") as file:
         pickle.dump((people, vocab), file, protocol=4)
     return people, vocab
+
+def process_data(tupl, use_propensity, drop_matches=True):
+    treatment, matched_sample, matched_pairs = tupl
+
+    if use_propensity:
+        prop_scores = [x[2] for x in matched_pairs]
+        thresh = np.mean(prop_scores) + np.std(prop_scores)
+
+    print("Orig sizes", len(treatment), len(matched_sample))
+    control_counts = Counter()
+    # Drop people with too few category matches
+    treatment_drop = set()
+    control_drop = set()
+    new_matched_pairs = []
+    prop_scores = []
+    for x in matched_pairs:
+        control_counts[x[1]] += 1
+        if use_propensity:
+            if x[2] > thresh:
+                treatment_drop.add(x[0])
+                control_drop.add(x[1] + "::" + x[0])
+            else:
+                new_matched_pairs.append(x)
+        else:
+            cats = [c for c in x[3] if not 'alumn' in c and not 'births' in c]
+            if len(cats) < 2:
+                treatment_drop.add(x[0])
+                control_drop.add(x[1] + "::" + x[0])
+            else:
+                new_matched_pairs.append(x)
+
+    if drop_matches:
+        print("Dropping", len(treatment_drop), len(control_drop))
+        treatment = {t:i for t,i in treatment.items() if not t in treatment_drop}
+        matched_sample = {t:i for t,i in matched_sample.items() if not t in control_drop}
+        matched_pairs = new_matched_pairs
+
+    # Add back dropped categories
+    for p,info in treatment.items():
+        treatment[p]["categories"] = set(list(info["tfidf"].keys()))
+
+    return treatment, matched_sample, matched_pairs
+
+def get_invalid_cats(invalid_keywords = None, original_treatment_cats = None, treatment_names_list = None, control_names = None, people = None, cache_name = None):
+    cache_name = os.path.join(CACHE_PATH, cache_name)
+    if os.path.exists(cache_name):
+        invalid_cats = [l.strip() for l in open(cache_name).readlines()]
+        return set(invalid_cats)
+
+    comparison_cats = [people[n]["categories"] for n in control_names if n in people]
+    comparison_cats = set([item for sublist in comparison_cats for item in sublist])
+
+    invalid_treatment_cats = set()
+    all_treatment_cats = set()
+    for treatment_names in treatment_names_list:
+        treatment_cats = [people[n]["categories"] for n in treatment_names if n in people]
+        treatment_cats = set([item for sublist in treatment_cats for item in sublist])
+
+        treatment_only_cats = treatment_cats - comparison_cats
+        invalid_treatment_only_cats = [c for c in treatment_only_cats if any([x in c for x in invalid_keywords])]
+        invalid_treatment_cats.update(invalid_treatment_only_cats)
+        all_treatment_cats.update(treatment_cats)
+
+    comparison_only_cats = comparison_cats - all_treatment_cats
+
+    invalid_comparison_only_cats = [c for c in comparison_only_cats if any([x in c for x in invalid_keywords])]
+
+    all_invalid_cats = set(list(original_treatment_cats) + invalid_treatment_only_cats + invalid_comparison_only_cats)
+    with open(cache_name, "w") as fp:
+        fp.write("\n".join(list(all_invalid_cats)))
+
+    return all_invalid_cats
+
+def get_code_to_language():
+    code_to_language  = {}
+    with open(os.path.join(CACHE_PATH, "language_codes.txt")) as fp:
+        for line in fp.readlines():
+            parts = line.strip().split("|")
+            code_to_language[parts[0]] = parts[2]
+    return code_to_language
+
 
 if __name__ == "__main__":
     get_filtered_people_with_topics()

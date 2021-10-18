@@ -20,7 +20,7 @@ import argparse
 "for a given covariate between the treatment and control groups and dividing"
 "by the standard deviation in the treatment group"
 # Categories that we don't care about should already be filtered out
-def get_standardized_bias(treatment_people, control_people, cats):
+def get_standardized_bias(treatment_people, control_people, cats, return_all=False):
     treatment_cats = Counter()
     for _,t in treatment_people.items():
         treatment_cats.update(t['categories'])
@@ -52,6 +52,10 @@ def get_standardized_bias(treatment_people, control_people, cats):
     #     print_count += 1
 
     all_bias = [v[0] for k,v in cat_to_std_bias.items()]
+
+    if return_all:
+        return all_bias
+
     avg_bias = sum(all_bias) / len(all_bias)
     num_over25 = len([a for a in all_bias if a > 0.25])
     num_over1 = len([a for a in all_bias if a > 0.1 and a <= 0.25])

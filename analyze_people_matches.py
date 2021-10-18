@@ -1,7 +1,7 @@
 # Run the primary analyses in the paper
 from make_people_matches import print_metrics
 from category_analysis import get_races, get_gender
-from utils import get_filtered_people_with_topics, load_categories, CACHE_PATH
+from utils import get_filtered_people_with_topics, load_categories, CACHE_PATH, MATCHED_CACHE_PATH, process_data, get_invalid_cats, get_code_to_language
 import pickle
 import argparse, os
 import random
@@ -89,18 +89,20 @@ def print_odds_from_people(treatment, control):
     delta = write_log_odds(treatment_counts, control_counts, prior)
 
     print(len(delta))
+    # NOTE for transgender men I changed this to 20. There are fewer
+    # that 100 articles in that data set
     delta = {d:s for d,s in delta.items() if article_count[d] > 100}
 
-    delta_sorted = sorted(delta, key=delta.get)
+    delta_sorted = sorted(delta, key=delta.get, reverse=True)
     print(len(delta))
 
 
 
-    for w in delta_sorted[:100]:
-        print(w, delta[w], article_count[w])
+    for w in delta_sorted[:25]:
+        print(w, "{:0.2f}".format(delta[w]), article_count[w])
     print("################################################################################")
-    for w in delta_sorted[-100:]:
-        print(w, delta[w], article_count[w])
+    for w in delta_sorted[-25:]:
+        print(w, "{:0.2f}".format(delta[w]), article_count[w])
 
 
 def compare_article_lengths(treatment, matched_sample):
@@ -113,7 +115,7 @@ def compare_article_lengths(treatment, matched_sample):
         control_lengths.append(len(control_info['text']))
 
     treatment_average, control_average, pvalue = paired_ttest(treatment_lengths, control_lengths)
-    print("Article Lengths", treatment_average, control_average, pvalue)
+    print("Article Lengths {:0.2f} {:0.2f}".format(treatment_average, control_average), pvalue)
 
 def compare_category_counts(treatment, matched_sample):
     treatment_lengths = []
@@ -125,7 +127,7 @@ def compare_category_counts(treatment, matched_sample):
         control_lengths.append(len(control_info['categories']))
 
     treatment_average, control_average, pvalue = paired_ttest(treatment_lengths, control_lengths)
-    print("Category Counts", treatment_average, control_average, pvalue)
+    print("Category Counts {:0.2f} {:0.2f}".format(treatment_average, control_average), pvalue)
 
 def get_sec_length(section_name, sections, tokenizer = english_tokenizer):
     if section_name in sections:
@@ -196,11 +198,11 @@ def compare_lang_secs(treatment, matched_sample, lang, min_article_count):
 
 
     treatment_average, control_average, pvalue = paired_ttest(treatment_article_lengths, control_article_lengths)
-    print(treatment_average, control_average, pvalue, end=" ") # Article Lengths
+    print(treatment_average, control_average, pvalue, sep="|", end="|") # Article Lengths
 
 
     treatment_average, control_average, pvalue = paired_ttest(treatment_section_numbers, control_section_numbers)
-    print(treatment_average, control_average, pvalue) # Number of Sections
+    print(treatment_average, control_average, pvalue, sep="|") # Number of Sections
 
     sect_counts = {x:c for x,c in sect_counts.items() if c >= min_article_count}
 
@@ -236,12 +238,12 @@ def compare_named_sec(treatment, matched_sample, section_name):
     print(section_name,treatment_average, control_average, pvalue)
 
 
-def print_multiple_tests(val_to_counts, treatment_to_list, control_to_list, test_type, skip=[], only_significant=False):
+def print_multiple_tests(val_to_counts, treatment_to_list, control_to_list, test_type, skip=[], only_significant=False, code_to_print = None):
     vals = []
     percents = []
     pvals = []
     for l in val_to_counts:
-        if l == skip:
+        if l in skip:
             continue
         try:
             treatment_avg, control_avg, pval = test_type(treatment_to_list[l], control_to_list[l])
@@ -259,7 +261,10 @@ def print_multiple_tests(val_to_counts, treatment_to_list, control_to_list, test
     for l,p,reject,percents in zip(vals, corrected_pvals, is_reject, percents):
         if only_significant and not reject:
             continue
-        print(l, percents[0], percents[1], p, reject, sep=",")
+        if code_to_print is None:
+            print(l, percents[0], percents[1], p, reject, sep=",")
+        else:
+            print(l, code_to_print.get(l, l), percents[0], percents[1], p, reject, sep="|")
 
 
 # 'langs': [('en', 'Charles_Rangel'), ('arz', 'تشارليس_بى._رانجيل'), ('de', 'Charles_B._Rangel')]
@@ -303,7 +308,7 @@ def compare_langs(treatment, matched_sample, min_article_count):
     print("Number of languages", treatment_average, control_average, pvalue)
     print("Language,treat_avg,control_avg,pval")
     print_multiple_tests(lang_counts, treatment_lang_to_binary, control_lang_to_binary,
-        binary_mcnemar_test, skip=['en'])
+        binary_mcnemar_test, skip=['en'], code_to_print=get_code_to_language())
 
 def compare_edits(treatment, matched_sample):
     edit_cache = os.path.join(CACHE_PATH, 'people_edits.pkl')
@@ -365,6 +370,7 @@ def compare_edits(treatment, matched_sample):
 
 def print_language_counts(treatment, matched_sample):
     language_cache = os.path.join(CACHE_PATH, 'people_articles.pkl')
+    code_to_language = get_code_to_language()
     people_multilingual = pickle.load(open(language_cache, 'rb'))
     lang_counts = Counter()
     lang_to_control_list = defaultdict(list)
@@ -372,10 +378,11 @@ def print_language_counts(treatment, matched_sample):
     lang_to_control_list_english = defaultdict(list)
     lang_to_treatment_list_english = defaultdict(list)
 
+    skipped = 0
     for names,_ in matched_sample.items():
         treatment_name = names.split('::')[1]
         control_name = names.split('::')[0]
-        if treatment_name in people_multilingual:
+        if treatment_name in people_multilingual and control_name in people_multilingual:
             treatment_langs = set(people_multilingual[treatment_name].keys())
             control_langs = set(people_multilingual[control_name].keys())
             both = treatment_langs.intersection(control_langs)
@@ -387,57 +394,28 @@ def print_language_counts(treatment, matched_sample):
                 lang_to_control_list[l].append(people_multilingual[control_name][l])
                 lang_to_treatment_list_english[l].append(people_multilingual[treatment_name]['en'])
                 lang_to_control_list_english[l].append(people_multilingual[control_name]['en'])
-
-
-    for x in lang_counts:
-        print(x, lang_counts[x], end=" ")
-        if x != 'en':
-            # I originally ran this with 20. Setting higher for easier reading
-            # compare_lang_secs(lang_to_treatment_list[x], lang_to_control_list[x], x, 20)
-            compare_lang_secs(lang_to_treatment_list_english[x], lang_to_control_list_english[x], 'en', 100)
-
-
-def print_sample(d, max_print = 10):
-    print_count = 0
-    for x,_ in d.items():
-        print(x)
-        print_count += 1
-        if print_count > max_print:
-            break
-
-def process_data(tupl):
-    treatment, matched_sample, matched_pairs = tupl
-
-    print("Orig sizes", len(treatment), len(matched_sample))
-    control_counts = Counter()
-    # Drop people with too few category matches
-    treatment_drop = set()
-    control_drop = set()
-    new_matched_pairs = []
-    for x in matched_pairs:
-        control_counts[x[1]] += 1
-        cats = [c for c in x[3] if not 'alumn' in c and not 'births' in c]
-        if x[1] == 'Heather_Lind' or len(cats) < 2:
-            treatment_drop.add(x[0])
-            control_drop.add(x[1] + "::" + x[0])
         else:
-            new_matched_pairs.append(x)
+            skipped += 1
 
+    print("Missing language info for %s pairs" % skipped)
 
-    print("Dropping", len(treatment_drop), len(control_drop))
-
-    treatment = {t:i for t,i in treatment.items() if not t in treatment_drop}
-    matched_sample = {t:i for t,i in matched_sample.items() if not t in control_drop}
-    matched_pairs = new_matched_pairs
-
-    # Add back dropped categories
-    for p,info in treatment.items():
-        treatment[p]["categories"] = set(list(info["tfidf"].keys()))
-
-    return treatment, matched_sample, matched_pairs
+    print_sep("Comparing article lengths in different languages")
+    print("If there is a significant difference in length of sections for any language, they are printed below the language row (treatment length, control length, p-value")
+    print("Number of Pairs,Treatement Article Length,Control Article Length,Length p-value,Treatment Number of Sections,Control Number of sections,Section p-value")
+    for x in lang_counts:
+        if x != 'en':
+            print(x, code_to_language[x], lang_counts[x], sep="|", end="|")
+            compare_lang_secs(lang_to_treatment_list[x], lang_to_control_list[x], x, 100)
+    print()
+    print_sep("Comparing article lengths in English for articles available in multiple languages")
+    print("If there is a significant difference in length of sections for any language, they are printed below the language row (treatment length, control length, p-value")
+    for x in lang_counts:
+        if x != 'en':
+            print(x, code_to_language[x], lang_counts[x], sep="|", end="|")
+            compare_lang_secs(lang_to_treatment_list_english[x], lang_to_control_list_english[x], 'en', 100)
+    
 
 def print_unmatched_quick_counts(all_treatment, all_control):
-
     def get_counts(people_dict):
         lengths = []
         cat_nums = []
@@ -489,11 +467,6 @@ def print_sample_pairs(matched_pairs, treatment, matched_sample):
     print("Avg number of common cats", len_common_cats)
     sample = random.sample(matched_pairs, 20)
 
-    sample = []
-    for s in matched_pairs:
-        treat_name = s[0]
-        if treat_name in ['Njena_Reddd_Foxxx', 'Jacky_Clark_Chisholm', 'Barbara_Becnel', 'Lily_McNair', 'Keke_Palmer', 'Karintha_Styles', 'Arenda_L._Wright_Allen', 'Ayanna_Pressley']:
-            sample.append(s)
     print("Name,Text Length, Language Count, Languages, Categories in common,Match Score")
 
     for s in sample:
@@ -511,53 +484,63 @@ def print_sample_pairs(matched_pairs, treatment, matched_sample):
         print()
 
 
-def run_analysis(tupl, treatment_names, control_names, treatment_categories, people, vocab, min_article_count, print_unmatched = False):
-    treatment, matched_sample, matched_pairs = process_data(tupl)
+def print_sep(print_str):
+    print("############################### %s ##################################################" % print_str)
+
+def run_analysis(tupl, treatment_names, control_names, invalid_categories, people, vocab, min_article_count, is_propensity, print_unmatched = False):
+    treatment, matched_sample, matched_pairs = process_data(tupl, is_propensity)
 
     if print_unmatched:
         print("################################################################################")
-        print("Printing unmatched odds")
+        print("Printing unmatched metrics")
         print("################################################################################")
 
         all_treatment = {x:people[x] for x in treatment_names if x in people}
         all_control = {x:people[x] for x in control_names if x in people}
         print("Data sizes", len(all_treatment), len(all_control))
 
-        print_metrics(all_treatment, all_control, None, vocab, "Empty", treatment_categories)
+        print_sep("Printing Match Evaluation metrics")
+        print_metrics(all_treatment, all_control, None, vocab, "Empty", invalid_categories, print_with_marker_cats=False)
+        
+        print_sep("Printing Top and Bottom Log-odds words")
         print_odds_from_people(all_treatment, all_control)
+        
+        print_sep("Print basic statistics")
         print_unmatched_quick_counts(all_treatment, all_control)
-        compare_unmatched_sec_lengths(all_treatment, all_control, min_article_count)
+
+        # compare_unmatched_sec_lengths(all_treatment, all_control, min_article_count)
     else:
-        print_sample_pairs(matched_pairs, treatment, matched_sample)
-        print_metrics(treatment, matched_sample, None, vocab, "Empty", treatment_categories)
-        print_odds_from_people(treatment, matched_sample)
-        compare_article_lengths(treatment, matched_sample)
-        compare_category_counts(treatment, matched_sample)
-        compare_langs(treatment, matched_sample, min_article_count)
-        compare_edits(treatment, matched_sample)
-        compare_sec_lengths(treatment, matched_sample, min_article_count)
+        # print_sep("Printing Match Evaluation metrics")
+        # print_metrics(treatment, matched_sample, None, vocab, "Empty", invalid_categories, print_with_marker_cats=False)
+        
+        # print_sep("Printing Sample Pairs")
+        # print_sample_pairs(matched_pairs, treatment, matched_sample)
+
+        # print_sep("Printing Top and Bottom Log-odds words")
+        # print_odds_from_people(treatment, matched_sample)
+
+        # print_sep("Comparing article lengths")
+        # compare_article_lengths(treatment, matched_sample)
+
+        # print_sep("Comparing number of categories each article has")
+        # compare_category_counts(treatment, matched_sample)
+
+        # print_sep("Comparing which languages article is available in")
+        # compare_langs(treatment, matched_sample, min_article_count)
+
+        # print_sep("Comparing number of edits each article has")
+        # compare_edits(treatment, matched_sample)
+
+        # print_sep("Comparing length of common sections")
+        # compare_sec_lengths(treatment, matched_sample, min_article_count)
+
+        print_sep("Comparing length of personal life sections")
         compare_named_sec(treatment, matched_sample, "personal life")
-        compare_named_sec(treatment, matched_sample, "career")
-        print_language_counts(treatment, matched_sample)
 
+        # print_sep("Comparing length of career sections")
+        # compare_named_sec(treatment, matched_sample, "career")
 
-def get_transgender_lang_diffs():
-    cache_name = os.path.join(CACHE_PATH, 'matched_gender_cisgender_corrected.pkl')
-    _, _, transgender_men, transgender_women = pickle.load(open(cache_name,"rb"))
-
-    tm_treatment, tm_matched_sample, _ = process_data(transgender_men)
-    tw_treatment, tw_matched_sample, _ = process_data(transgender_women)
-
-    matched_sample = {}
-    matched_sample.update(tw_matched_sample)
-    matched_sample.update(tm_matched_sample)
-
-    treatment = {}
-    treatment.update(tm_treatment)
-    treatment.update(tw_treatment)
-
-    print("Total transgender people", len(matched_sample), len(treatment))
-    return get_lang_counts(treatment, matched_sample)
+        # print_language_counts(treatment, matched_sample)
 
 def get_lang_counts(treatment, matched_sample):
     treatment_lang_to_binary = defaultdict(list)
@@ -594,25 +577,32 @@ def main():
         'women', 'nonbinary', 'transgender_women', 'transgender_men',
         'black_women'],
         default='african')
+    parser.add_argument("--match_method", choices=['number', 'percent', 'tfidf', 'pivot_tfidf', 'random', 'propensity', "propensity_tfidf"], default='pivot_tfidf')
     parser.add_argument("--print_unmatched", action='store_true')
     args = parser.parse_args()
     print("Running", args.people_type)
 
     people, vocab = get_filtered_people_with_topics()
     cats = load_categories()
+    is_propensity = "propensity" in args.match_method
 
     if args.people_type in ['african', 'asian', 'latino']:
-        cache_name = os.path.join(CACHE_PATH, 'matched_race.pkl')
+        cache_name = os.path.join(MATCHED_CACHE_PATH, args.match_method + '_matched_race.pkl')
+        invalid_categories = get_invalid_cats(cache_name = "invalid_race_cats.txt")
+
         african_american, asian, latino = pickle.load(open(cache_name,"rb"))
         name_african_american, name_asians, name_latino, name_white, category_african_american, category_asian, category_latino, _ = get_races(cats, people)
 
         if args.people_type == 'african':
-            run_analysis(african_american, name_african_american, name_white, category_african_american, people, vocab, 100, args.print_unmatched)
+            run_analysis(african_american, name_african_american, name_white, invalid_categories, people, vocab, 100, is_propensity, args.print_unmatched)
         if args.people_type == 'asian':
-            run_analysis(asian, name_asians, name_white, category_asian, people, vocab, 100, args.print_unmatched)
+            run_analysis(asian, name_asians, name_white, invalid_categories, people, vocab, 100, is_propensity, args.print_unmatched)
         if args.people_type == 'latino':
-            run_analysis(latino, name_latino, name_white, category_latino, people, vocab, 100, args.print_unmatched)
+            run_analysis(latino, name_latino, name_white, invalid_categories, people, vocab, 100, is_propensity, args.print_unmatched)
     elif args.people_type == 'black_women':
+        race_invalid_categories = get_invalid_cats(cache_name = "invalid_race_cats.txt")
+        gender_invalid_categories = get_invalid_cats(cache_name = "invalid_gender_cats.txt")
+
         name_african_american, name_asians, name_latino, name_white, category_african_american, category_asian, category_latino, _ = get_races(cats, people)
         name_nb, name_men, name_women, name_transgender_men, name_transgender_women, name_cisgender_men, category_nb, category_LGBT = get_gender(cats, people)
 
@@ -622,35 +612,36 @@ def main():
         black_women = [n for n in name_african_american if n in name_women]
 
 
-        cache_name = os.path.join(CACHE_PATH, 'intersectional.pkl')
+        cache_name = os.path.join(MATCHED_CACHE_PATH, args.match_method + '_intersectional.pkl')
         vs_control_women, vs_black_men, vs_control_men = pickle.load(open(cache_name,"rb"))
 
         print("############################ Black women vs. Control women ######################################")
-        run_analysis(vs_control_women, black_women, control_women, category_african_american, people, vocab, 50, args.print_unmatched)
+        run_analysis(vs_control_women, black_women, control_women, race_invalid_categories, people, vocab, 50, is_propensity, args.print_unmatched)
 
 
         print("############################ Black women vs. Black men ########################################")
-        run_analysis(vs_black_men, black_women, black_men, category_african_american, people, vocab, 50, args.print_unmatched)
+        run_analysis(vs_black_men, black_women, black_men, gender_invalid_categories, people, vocab, 50, is_propensity, args.print_unmatched)
 
         print("############################ Black women vs. Control men #####################################")
-        run_analysis(vs_control_men, black_women, control_men, category_african_american, people, vocab, 50, args.print_unmatched)
+        run_analysis(vs_control_men, black_women, control_men, race_invalid_categories.union(gender_invalid_categories), people, vocab, 50, is_propensity, args.print_unmatched)
 
     else:
-        cache_name = os.path.join(CACHE_PATH, 'matched_gender_cisgender_corrected.pkl')
+        cache_name = os.path.join(MATCHED_CACHE_PATH, args.match_method + '_matched_gender.pkl')
+        invalid_categories = get_invalid_cats(cache_name = "invalid_gender_cats.txt")
         women, nb, transgender_men, transgender_women = pickle.load(open(cache_name,"rb"))
         name_nb, name_men, name_women, name_transgender_men, name_transgender_women, name_cisgender_men, category_nb, category_LGBT = get_gender(cats, people)
 
         if args.people_type == 'women':
             # We didn't define women group with categories, there are no invalid cats
-            run_analysis(women, name_women, name_men, set(), people, vocab, 500, args.print_unmatched)
+            run_analysis(women, name_women, name_men, invalid_categories, people, vocab, 500, is_propensity, args.print_unmatched)
         if args.people_type == 'transgender_women':
             # We didn't define group with categories, there are no invalid cats
-            run_analysis(transgender_women, name_transgender_women, name_men, set(), people, vocab, 20, args.print_unmatched)
+            run_analysis(transgender_women, name_transgender_women, name_men, invalid_categories, people, vocab, 20, is_propensity, args.print_unmatched)
         if args.people_type == 'transgender_men':
             # We didn't define group with categories, there are no invalid cats
-            run_analysis(transgender_men, name_transgender_men, name_men, set(), people, vocab, 20, args.print_unmatched)
+            run_analysis(transgender_men, name_transgender_men, name_men, invalid_categories, people, vocab, 20, is_propensity, args.print_unmatched)
         if args.people_type == 'nonbinary':
-            run_analysis(nb, name_nb, name_men, category_nb, people, vocab, 50, args.print_unmatched)
+            run_analysis(nb, name_nb, name_men, category_nb, people, vocab, 50, is_propensity, args.print_unmatched)
 
 
 

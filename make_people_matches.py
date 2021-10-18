@@ -12,14 +12,14 @@ def do_match(treatment_names, candidate_names, people, vocab, title, invalid_cat
     print_metrics(treatment, matched_sample, matched_pairs, vocab, title, invalid_cats)
     return treatment, matched_sample, matched_pairs
 
-def print_metrics(treatment, matched_sample, matched_pairs, vocab, title, invalid_cats):
+def print_metrics(treatment, matched_sample, matched_pairs, vocab, title, invalid_cats, print_with_marker_cats=True):
     print("Matching results for", title)
     print("Treatment and matched sizes", len(treatment), len(matched_sample))
 
-    print("Evaluation with marker cats")
-    eval_matched = assess_match(treatment, matched_sample, vocab)
-    print_eval(eval_matched)
-
+    if print_with_marker_cats:
+        print("Evaluation with marker cats")
+        eval_matched = assess_match(treatment, matched_sample, vocab)
+        print_eval(eval_matched)
 
     # Pull out the marked categories before assessing the match
     measure_treatment = {}
@@ -34,7 +34,17 @@ def print_metrics(treatment, matched_sample, matched_pairs, vocab, title, invali
 
     print("Evaluation without marker cats")
     eval_matched = assess_match(measure_treatment, measure_matched, vocab)
-    print_eval(eval_matched)
+    if print_with_marker_cats:
+        print_eval(eval_matched)
+    else:
+        for x in eval_matched:
+            if type(x) == int:
+                print(x)
+            else:
+                if x < 1:
+                    print("{:.4f}".format(x))
+                else:
+                    print("{:.2f}".format(x))
 
     if matched_pairs is not None:
         for x in random.sample(matched_pairs, 10):
